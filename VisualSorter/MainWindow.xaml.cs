@@ -46,10 +46,10 @@ namespace WpfApplication1
             {
                 public DateTime startTime;
                 public int numItems;
-                public int numCompares;
-                public int numUpdates;
-                public int numReads;
-                public int numWrites;
+                public uint numCompares;
+                public uint numUpdates;
+                public uint numReads;
+                public uint numWrites;
                 public int MaxDepth;
                 public override string ToString()
                 {
@@ -59,7 +59,7 @@ namespace WpfApplication1
                     {
                         strDepth = $" MaxDepth= {MaxDepth}";
                     }
-                    return $"Secs= {elapsed,6:n2} Items= {numItems,6} Compares= {numCompares,11:n0} Updates= {numUpdates,11:n0} Reads= {numReads,11:n0} Writes= {numWrites,11:n0}{strDepth}";
+                    return $"Secs= {elapsed,9:n2} Items= {numItems,6} Compares= {numCompares,11:n0} Updates= {numUpdates,11:n0} Reads= {numReads,11:n0} Writes= {numWrites,11:n0}{strDepth}";
                 }
             }
             public static Stats stats;

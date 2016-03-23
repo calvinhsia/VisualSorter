@@ -16,7 +16,7 @@ namespace SorterTests
             TestContext.WriteLine("Start");
             foreach (var sortType in MainWindow._SortTypes)
             {
-                for (int pow = 0, nTotal = 1; pow < 7; pow++)
+                for (int pow = 0, nTotal = 1; pow < 6; pow++)
                 {
                     var mwindow = new MainWindow();
                     mwindow._nRows = 10000; // don't limit data by # rows
