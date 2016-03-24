@@ -22,6 +22,7 @@ namespace WpfApplication1
             "Cycle",
             "Merge",
             "MergeIP",
+            "MergeIP2",
             "Quick",
             "Shell",
             "Heap",
@@ -46,10 +47,10 @@ namespace WpfApplication1
             {
                 public DateTime startTime;
                 public int numItems;
-                public uint numCompares;
-                public uint numUpdates;
-                public uint numReads;
-                public uint numWrites;
+                public long numCompares;
+                public long numUpdates;
+                public long numReads;
+                public long numWrites;
                 public int MaxDepth;
                 public override string ToString()
                 {
@@ -59,7 +60,7 @@ namespace WpfApplication1
                     {
                         strDepth = $" MaxDepth= {MaxDepth}";
                     }
-                    return $"Secs= {elapsed,9:n2} Items= {numItems,6} Compares= {numCompares,11:n0} Updates= {numUpdates,11:n0} Reads= {numReads,11:n0} Writes= {numWrites,11:n0}{strDepth}";
+                    return $"Secs= {elapsed,9:n3} Items= {numItems,6} Compares= {numCompares,11:n0} Updates= {numUpdates,11:n0} Reads= {numReads,11:n0} Writes= {numWrites,11:n0}{strDepth}";
                 }
             }
             public static Stats stats;
@@ -77,10 +78,8 @@ namespace WpfApplication1
                 if (a != b)
                 {
                     var temp = a.data;
-                    a.data = b.data;
-                    b.data = temp;
-                    a.Update();
-                    b.Update();
+                    a.SetData(b.data);
+                    b.SetData(temp);
                 }
             }
             private string _data;
@@ -189,11 +188,11 @@ namespace WpfApplication1
                     ItemsSource = _SortTypes,
                     Width = 150,
                 };
-                cboSortType.SelectedIndex = 6;
+                cboSortType.SelectedIndex = 7;
                 spControls.Children.Add(cboSortType);
                 var txtNumItems = new TextBox()
                 {
-                    Text = "4000",
+                    Text = "5",
                     ToolTip = "Max Number of items to sort. (limited by display)",
                     Width = 100
                 };
@@ -219,13 +218,13 @@ namespace WpfApplication1
                 chkShowSort.Checked += (os, es) => _ShowSort = true;
                 chkShowSort.Unchecked += (os, es) => _ShowSort = false;
                 spVertControls.Children.Add(chkShowSort);
-                var txtDataLength = new TextBox()
+                var txtMaxDataLength = new TextBox()
                 {
                     Text = "5",
                     Width = 40,
                     ToolTip = "Max # of chars per datum"
                 };
-                spVertControls.Children.Add(txtDataLength);
+                spVertControls.Children.Add(txtMaxDataLength);
                 var txtStatus = new TextBox()
                 {
                     Margin = new Thickness(10, 0, 0, 0),
@@ -254,8 +253,8 @@ namespace WpfApplication1
                     _canvas.Children.Add(spControls);
                     int nTotal = int.Parse(txtNumItems.Text);
                     var arrData = new List<SortBox>();
-                    var datalength = int.Parse(txtDataLength.Text);
-                    arrData = InitData(ref nTotal, datalength, chkLettersOnly.IsChecked.Value);
+                    var maxDatalength = int.Parse(txtMaxDataLength.Text);
+                    arrData = InitData(ref nTotal, maxDatalength, chkLettersOnly.IsChecked.Value);
 
                     var tsk = Task.Run(() =>
                     {
@@ -276,7 +275,7 @@ namespace WpfApplication1
                                     }
                                 }
                                 string donemsg = _cancelTokSrc.IsCancellationRequested ? "Aborted" : "Done   ";
-                                addStatusMsg($"{sortType} {donemsg} {stats} {hasError}");
+                                addStatusMsg($"{sortType,10} {donemsg} {stats} {hasError}");
                             }));
                     });
                 };
@@ -307,12 +306,12 @@ namespace WpfApplication1
             return hasError;
         }
 
-        public List<SortBox> InitData(ref int nTotal, int datalength, bool ltrsOnly)
+        public List<SortBox> InitData(ref int nTotal, int maxDatalength, bool ltrsOnly)
         {
             var arrData = new List<SortBox>();
             var rand = new Random(1);
-            int colWidth = 20 + 8 * (datalength - 1);
-            int nCols = 60 - (datalength - 1) * 8;
+            int colWidth = 20 + 8 * (maxDatalength - 1);
+            int nCols = 60 - (maxDatalength - 1) * 8;
 
             for (int i = 0; i < _nRows; i++)
             {
@@ -325,22 +324,22 @@ namespace WpfApplication1
                         {
                             // set the first few items to const so easier to debug algorithms
                             case 0:
-                                dat = "zer".Substring(0, Math.Min(datalength, 3));
+                                dat = "zer".Substring(0, Math.Min(maxDatalength, 3));
                                 break;
                             case 1:
-                                dat = "one".Substring(0, Math.Min(datalength, 3));
+                                dat = "one".Substring(0, Math.Min(maxDatalength, 3));
                                 break;
                             case 2:
-                                dat = "two".Substring(0, Math.Min(datalength, 3));
+                                dat = "two".Substring(0, Math.Min(maxDatalength, 3));
                                 break;
                             case 3:
-                                dat = "thr".Substring(0, Math.Min(datalength, 3));
+                                dat = "thr".Substring(0, Math.Min(maxDatalength, 3));
                                 break;
                             case 4:
-                                dat = "fou".Substring(0, Math.Min(datalength, 3));
+                                dat = "fou".Substring(0, Math.Min(maxDatalength, 3));
                                 break;
                             default:
-                                var len = 1 + rand.Next(datalength);
+                                var len = 1 + rand.Next(maxDatalength);
                                 var datarray = new char[len];
                                 for (int k = 0; k < len; k++)
                                 {
@@ -383,19 +382,20 @@ namespace WpfApplication1
                 switch (sortType)
                 {
                     case "Bubble":
-                        bool didSwap = false;
+                        var newEnd = 0;
+                        var nEnd = nTotal;
                         do
                         {
-                            didSwap = false;
-                            for (int i = 1; i < nTotal; i++)
+                            for (int i = 1; i < nEnd; i++)
                             {
                                 if (arrData[i - 1] > arrData[i])
                                 {
-                                    didSwap = true;
                                     SortBox.Swap(arrData[i - 1], arrData[i]);
+                                    newEnd = i;
                                 }
                             }
-                        } while (didSwap);
+                            nEnd--;
+                        } while (newEnd != 0);
                         break;
                     case "Unknown":
                         for (int i = 1; i < nTotal; i++)
@@ -499,10 +499,7 @@ namespace WpfApplication1
                         Action<int, int, int> MergeSort = null;
                         MergeSort = (left, right, depth) =>
                         {
-                            if (depth > SortBox.stats.MaxDepth)
-                            {
-                                SortBox.stats.MaxDepth = depth;
-                            }
+                            SortBox.stats.MaxDepth = Math.Max(depth, SortBox.stats.MaxDepth);
                             if (right > left)
                             {
                                 int mid = (right + left) / 2;
@@ -545,6 +542,46 @@ namespace WpfApplication1
                         MergeSort(0, nTotal - 1, 0);
                         break;
                     case "MergeIP":
+                        Action<int, int, int> MergeSortIp = null;
+                        MergeSortIp = (left, right, depth) =>
+                        {
+                            SortBox.stats.MaxDepth = Math.Max(depth, SortBox.stats.MaxDepth);
+                            if (left >=right)
+                            {
+                                return;
+                            }
+                            int mid = (left + right)/ 2;
+                            MergeSortIp(left, mid, depth + 1);
+                            mid++;
+                            MergeSortIp(mid, right, depth + 1);
+                            int leftNdx = left;
+                            int pivot = mid;
+                            int leftEnd = pivot-1;
+                            while (leftNdx <= leftEnd && mid <= right)
+                            {
+                                if (arrData[leftNdx] < arrData[mid])
+                                {
+                                    // left already in place
+                                    leftNdx++;
+                                }
+                                else
+                                {
+                                    // take from right: shift everyone over to make room
+                                    var temp = arrData[mid].data;
+                                    for (int j = mid - 1; j >= leftNdx; j--)
+                                    {
+                                        arrData[j + 1].SetData(arrData[j].data);
+                                    }
+                                    arrData[leftNdx].SetData(temp);
+                                    leftNdx++;
+                                    leftEnd++;
+                                    mid++;
+                                }
+                            }
+                        };
+                        MergeSortIp(0, nTotal - 1, 0);
+                        break;
+                    case "MergeIP2":
                         //http://stackoverflow.com/questions/2571049/how-to-sort-in-place-using-the-merge-sort-algorithm/22839426#22839426
                         Action<int, int> reverse = (a, b) =>
                         {
@@ -600,10 +637,7 @@ namespace WpfApplication1
                         Action<int, int, int, int> mergeInPlace = null;
                         mergeInPlace = (left, mid, right, depth) =>
                         {
-                            if (depth > SortBox.stats.MaxDepth)
-                            {
-                                SortBox.stats.MaxDepth = depth;
-                            }
+                            SortBox.stats.MaxDepth = Math.Max(depth, SortBox.stats.MaxDepth);
                             int n1 = mid - left;
                             int n2 = right - mid;
 
@@ -619,7 +653,6 @@ namespace WpfApplication1
                             else
                             {
                                 int p, q;
-
                                 if (n1 <= n2)
                                 {
                                     q = mid + n2 / 2;
@@ -654,10 +687,7 @@ namespace WpfApplication1
                         Action<int, int, int> quickSort = null;
                         quickSort = (left, right, depth) =>
                         {
-                            if (depth > SortBox.stats.MaxDepth)
-                            {
-                                SortBox.stats.MaxDepth = depth;
-                            }
+                            SortBox.stats.MaxDepth = Math.Max(depth, SortBox.stats.MaxDepth);
                             if (left < right)
                             {
                                 var pivot = arrData[left];
