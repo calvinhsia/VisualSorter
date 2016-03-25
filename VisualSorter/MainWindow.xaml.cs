@@ -60,7 +60,7 @@ namespace WpfApplication1
                     {
                         strDepth = $" MaxDepth= {MaxDepth}";
                     }
-                    return $"Secs= {elapsed,9:n3} Items= {numItems,6} Compares= {numCompares,11:n0} Updates= {numUpdates,11:n0} Reads= {numReads,11:n0} Writes= {numWrites,11:n0}{strDepth}";
+                    return $"Secs= {elapsed,9:n3} Items= {numItems,6} Compares= {numCompares,13:n0} Updates= {numUpdates,13:n0} Reads= {numReads,13:n0} Writes= {numWrites,13:n0}{strDepth}";
                 }
             }
             public static Stats stats;
@@ -192,7 +192,7 @@ namespace WpfApplication1
                 spControls.Children.Add(cboSortType);
                 var txtNumItems = new TextBox()
                 {
-                    Text = "5",
+                    Text = "4000",
                     ToolTip = "Max Number of items to sort. (limited by display)",
                     Width = 100
                 };
@@ -354,9 +354,12 @@ namespace WpfApplication1
                         box.data = dat;
                         box.Content = box.data;
                         arrData.Add(box);
-                        Canvas.SetTop(box, 10 + _spControlsHeight + i * 10);
-                        Canvas.SetLeft(box, j * colWidth);
-                        _canvas.Children.Add(box);
+                        if (_ShowSort)
+                        {
+                            Canvas.SetTop(box, 10 + _spControlsHeight + i * 10);
+                            Canvas.SetLeft(box, j * colWidth);
+                            _canvas.Children.Add(box);
+                        }
                     }
                 }
             }
