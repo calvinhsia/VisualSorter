@@ -39,7 +39,7 @@ namespace WpfApplication1
         public static bool _ShowSort = true;
         internal Canvas _canvas = new Canvas();
         public static int _spControlsHeight = 60;
-        public int _nRows = (int)(SystemParameters.PrimaryScreenHeight - _spControlsHeight - 80) / 10;
+        public int _nRows;
 
         public class SortBox : Label, IComparable
         {
@@ -48,7 +48,6 @@ namespace WpfApplication1
                 public DateTime startTime;
                 public int numItems;
                 public long numCompares;
-                public long numUpdates;
                 public long numReads;
                 public long numWrites;
                 public int MaxDepth;
@@ -60,7 +59,7 @@ namespace WpfApplication1
                     {
                         strDepth = $" MaxDepth= {MaxDepth}";
                     }
-                    return $"Secs= {elapsed,9:n3} Items= {numItems,6} Compares= {numCompares,13:n0} Updates= {numUpdates,13:n0} Reads= {numReads,13:n0} Writes= {numWrites,13:n0}{strDepth}";
+                    return $"Secs= {elapsed,9:n3} Items= {numItems,6} Compares= {numCompares,13:n0} Reads= {numReads,13:n0} Writes= {numWrites,13:n0}{strDepth}";
                 }
             }
             public static Stats stats;
@@ -73,17 +72,17 @@ namespace WpfApplication1
                     MaxDepth = -1
                 };
             }
-            public static void Swap(SortBox a, SortBox b)
+            public void Swap(SortBox other)
             {
-                if (a != b)
+                if (this != other)
                 {
-                    var temp = a.data;
-                    a.SetData(b.data);
-                    b.SetData(temp);
+                    var temp = this.Data;
+                    this.Data = other.Data;
+                    other.Data = temp;
                 }
             }
             private string _data;
-            public string data
+            public string Data
             {
                 get
                 {
@@ -94,20 +93,13 @@ namespace WpfApplication1
                 {
                     _data = value;
                     stats.numWrites++;
-                }
-            }
-            public void SetData(string newvalue)
-            {
-                if (this.data != newvalue)
-                {
-                    this.data = newvalue;
                     this.Update();
                 }
             }
             public static bool operator <(SortBox a, SortBox b)
             {
                 stats.numCompares++;
-                if (string.CompareOrdinal(a.data, b.data) < 0)
+                if (string.CompareOrdinal(a.Data, b.Data) < 0)
                 {
                     return true;
                 }
@@ -116,7 +108,7 @@ namespace WpfApplication1
             public static bool operator >(SortBox a, SortBox b)
             {
                 stats.numCompares++;
-                if (string.CompareOrdinal(a.data, b.data) > 0)
+                if (string.CompareOrdinal(a.Data, b.Data) > 0)
                 {
                     return true;
                 }
@@ -124,14 +116,13 @@ namespace WpfApplication1
             }
             public void Update()
             {
-                stats.numUpdates++;
                 if (_ShowSort)
                 {
                     bool fCancel = false;
                     Dispatcher.Invoke(() =>
                     {
                         // set the content on the UI thread
-                        this.Content = this.data;
+                        this.Content = this.Data;
                         // check input queue for messages
                         var stat = GetQueueStatus(4);
                         if (stat != 0)
@@ -150,7 +141,7 @@ namespace WpfApplication1
             }
             public override string ToString()
             {
-                return $"{this.data}";
+                return $"{this.Data}";
             }
 
             public int CompareTo(object obj)
@@ -159,16 +150,17 @@ namespace WpfApplication1
                 var other = obj as SortBox;
                 if (other != null)
                 {
-                    return string.CompareOrdinal(this.data, other.data);
+                    return string.CompareOrdinal(this.Data, other.Data);
                 }
                 var otherAsString = obj as string;
-                return string.CompareOrdinal(this.data, otherAsString);
+                return string.CompareOrdinal(this.Data, otherAsString);
             }
         }
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             try
             {
+                _nRows = ((int)this.ActualHeight - _spControlsHeight - 50) / 10;
                 this.Content = _canvas;
                 var spControls = new StackPanel()
                 {
@@ -188,7 +180,7 @@ namespace WpfApplication1
                     ItemsSource = _SortTypes,
                     Width = 150,
                 };
-                cboSortType.SelectedIndex = 7;
+                cboSortType.SelectedIndex = 8;
                 spControls.Children.Add(cboSortType);
                 var txtNumItems = new TextBox()
                 {
@@ -256,11 +248,22 @@ namespace WpfApplication1
                     var arrData = new List<SortBox>();
                     var maxDatalength = int.Parse(txtMaxDataLength.Text);
                     arrData = InitData(ref nTotal, maxDatalength, chkLettersOnly.IsChecked.Value);
-
                     var tsk = Task.Run(() =>
                     {
                         // do the sorting on a background thread
-                        DoTheSorting(arrData, sortType, nTotal, addStatusMsg);
+                        try
+                        {
+                            addStatusMsg($"Starting {sortType} with {nTotal} items. Click anywhare to stop");
+                            DoTheSorting(arrData, sortType, nTotal);
+                        }
+                        catch (TaskCanceledException)
+                        {
+                        }
+                        catch (Exception ex)
+                        {
+                            addStatusMsg($"Exception {ex.ToString()}");
+                        }
+
                         txtStatus.Dispatcher.BeginInvoke(new Action(
                             () =>
                             {
@@ -272,7 +275,7 @@ namespace WpfApplication1
                                     // show sorted results
                                     for (int i = 0; i < nTotal; i++)
                                     {
-                                        arrData[i].Content = arrData[i].data;
+                                        arrData[i].Content = arrData[i].Data;
                                     }
                                 }
                                 string donemsg = _cancelTokSrc.IsCancellationRequested ? "Aborted" : "Done   ";
@@ -313,7 +316,11 @@ namespace WpfApplication1
             var arrData = new List<SortBox>();
             var rand = new Random(1);
             int colWidth = 20 + 8 * (maxDatalength - 1);
-            int nCols = (int)SystemParameters.PrimaryScreenWidth / colWidth;
+            int nCols = (int)this.ActualWidth / colWidth;
+            if (nCols == 0) //tests
+            {
+                nCols = 80;
+            }
             for (int i = 0; i < _nRows; i++)
             {
                 for (int j = 0; j < nCols; j++)
@@ -325,25 +332,29 @@ namespace WpfApplication1
                         {
                             // set the first few items to const so easier to debug algorithms
                             case 0:
-                                dat = "zer".Substring(0, Math.Min(maxDatalength, 3));
+                                dat = "zero";
                                 break;
                             case 1:
-                                dat = "one".Substring(0, Math.Min(maxDatalength, 3));
+                                dat = "one";
                                 break;
                             case 2:
-                                dat = "two".Substring(0, Math.Min(maxDatalength, 3));
+                                dat = "two";
                                 break;
                             case 3:
-                                dat = "thr".Substring(0, Math.Min(maxDatalength, 3));
+                                dat = "three";
                                 break;
                             case 4:
-                                dat = "fou".Substring(0, Math.Min(maxDatalength, 3));
+                                dat = "four";
+                                break;
+                            case 5:
+                                dat = "five";
                                 break;
                             default:
                                 var len = 1 + rand.Next(maxDatalength);
                                 var datarray = new char[len];
                                 for (int k = 0; k < len; k++)
                                 {
+                                    // "A" is 65,"!" is 33
                                     datarray[k] = (char)(ltrsOnly == true ?
                                         65 + rand.Next(26) :
                                         33 + rand.Next(90));
@@ -352,12 +363,12 @@ namespace WpfApplication1
                                 break;
                         }
                         var box = new SortBox();
-                        box.data = dat;
-                        box.Content = box.data;
+                        box.Data = dat.Substring(0, Math.Min(maxDatalength, dat.Length));
+                        box.Content = box.Data;
                         arrData.Add(box);
                         if (_ShowSort)
                         {
-                            Canvas.SetTop(box, 5 + _spControlsHeight + i * 10);
+                            Canvas.SetTop(box, 3 + _spControlsHeight + i * 10);
                             Canvas.SetLeft(box, j * colWidth);
                             _canvas.Children.Add(box);
                         }
@@ -370,431 +381,417 @@ namespace WpfApplication1
                 // show initial values
                 for (int i = 0; i < nTotal; i++)
                 {
-                    arrData[i].Content = arrData[i].data;
+                    arrData[i].Content = arrData[i].Data;
                 }
             }
-
             SortBox.InitStats(nTotal);
             return arrData;
         }
 
-        public void DoTheSorting(List<SortBox> arrData, string sortType, int nTotal, Action<string> addStatusMsg)
+        public void DoTheSorting(List<SortBox> arrData, string sortType, int nTotal)
         {
-            try
+            switch (sortType)
             {
-                addStatusMsg($"Starting {sortType} with {nTotal} items. Click anywhare to stop");
-                switch (sortType)
-                {
-                    case "Bubble":
-                        var newEnd = 0;
-                        var nEnd = nTotal;
-                        do
+                case "Bubble":
+                    var nEnd = nTotal;
+                    var newEnd = 0;
+                    do
+                    {
+                        newEnd = 0;
+                        for (int i = 1; i < nEnd; i++)
                         {
-                            for (int i = 1; i < nEnd; i++)
+                            if (arrData[i - 1] > arrData[i])
                             {
-                                if (arrData[i - 1] > arrData[i])
-                                {
-                                    SortBox.Swap(arrData[i - 1], arrData[i]);
-                                    newEnd = i;
-                                }
-                            }
-                            nEnd--;
-                        } while (newEnd != 0);
-                        break;
-                    case "Unknown":
-                        for (int i = 1; i < nTotal; i++)
-                        {
-                            for (int j = 0; j < i; j++)
-                            {
-                                if (arrData[i] < arrData[j])
-                                {
-                                    SortBox.Swap(arrData[i], arrData[j]);
-                                }
+                                arrData[i - 1].Swap(arrData[i]);
+                                newEnd = i;
                             }
                         }
-                        break;
-                    case "Stupid": // gnomeSort
-                        for (int i = 0; i < nTotal;)
+                        nEnd = newEnd;
+                    } while (newEnd != 0);
+                    break;
+                case "Unknown":
+                    for (int i = 1; i < nTotal; i++)
+                    {
+                        for (int j = 0; j < i; j++)
                         {
-                            if (i == 0 || !(arrData[i - 1] > arrData[i]))
+                            if (arrData[i] < arrData[j])
                             {
-                                i++;
+                                arrData[i].Swap(arrData[j]);
+                            }
+                        }
+                    }
+                    break;
+                case "Stupid": // gnomeSort
+                    for (int i = 0; i < nTotal;)
+                    {
+                        if (i == 0 || !(arrData[i - 1] > arrData[i]))
+                        {
+                            i++;
+                        }
+                        else
+                        {
+                            arrData[i - 1].Swap(arrData[i]);
+                            i--;
+                        }
+                    }
+                    break;
+                case "Insertion":
+                    for (int i = 1; i < nTotal; i++)
+                    {
+                        var t = arrData[i].Data;
+                        int j = i - 1;
+                        while (j >= 0 && arrData[j].CompareTo(t) > 0)
+                        {
+                            arrData[j + 1].Data = arrData[j].Data;
+                            j--;
+                        }
+                        arrData[j + 1].Data = t;
+                    }
+                    break;
+                case "Selection":
+                    // scan entire array for minimum, swap with 1st, then repeat for rest
+                    for (int i = 0; i < nTotal - 1; i++)
+                    {
+                        int minimum = i;
+                        for (int j = i + 1; j < nTotal; j++)
+                        {
+                            if (arrData[j] < arrData[minimum])
+                            {
+                                minimum = j;
+                            }
+                        }
+                        if (minimum != i)
+                        {
+                            arrData[i].Swap(arrData[minimum]);
+                        }
+                    }
+                    break;
+                case "Cycle":
+                    // deceptively fast because fewer updates, 
+                    // which are expensive in this code because of thread
+                    // context switches and drawing updated data
+                    // note the # of updates <= ntotal
+                    for (int cycleStart = 0; cycleStart < nTotal; cycleStart++)
+                    {
+                        // the item to place
+                        var item = arrData[cycleStart].Data;
+                        int pos = cycleStart;
+                        do
+                        {
+                            int nextPos = 0;
+                            // find it's position # in entire array
+                            for (int i = 0; i < nTotal; i++)
+                            {
+                                if (i != cycleStart && arrData[i].CompareTo(item) < 0)
+                                {
+                                    nextPos++;
+                                }
+                            }
+                            if (pos != nextPos)
+                            {
+                                // move past duplicates
+                                while (pos != nextPos && arrData[nextPos].CompareTo(item) == 0)
+                                {
+                                    nextPos++;
+                                }
+                                // save the cur value at pos
+                                var temp = arrData[nextPos].Data;
+                                // set the value at pos to the item to place
+                                arrData[nextPos].Data = item;
+                                // new value for which to seek position
+                                item = temp;
+                                pos = nextPos;
+                            }
+                        } while (pos != cycleStart);
+                    }
+                    break;
+                case "Merge":
+                    // not in place: uses additional storage
+                    // lets make a recursive lambda
+                    Action<int, int, int> MergeSort = null;
+                    MergeSort = (left, right, depth) =>
+                    {
+                        SortBox.stats.MaxDepth = Math.Max(depth, SortBox.stats.MaxDepth);
+                        if (right > left)
+                        {
+                            int mid = (right + left) / 2;
+                            MergeSort(left, mid, depth + 1);
+                            mid++;
+                            MergeSort(mid, right, depth + 1);
+                            // now we merge 2 sections that are already sorted
+                            int leftNdx = left;
+                            // use extra storage
+                            var temp = new string[right - left + 1];
+                            int tmpIndex = 0;
+                            int pivot = mid;
+                            while (leftNdx < pivot && mid <= right)
+                            {
+                                // fill temp from left or right
+                                if (arrData[leftNdx].CompareTo(arrData[mid]) > 0)
+                                {
+                                    temp[tmpIndex++] = arrData[mid++].Data;
+                                }
+                                else
+                                {
+                                    temp[tmpIndex++] = arrData[leftNdx++].Data;
+                                }
+                            }
+                            // deal with leftovers on left or right
+                            while (leftNdx < pivot)
+                            {
+                                temp[tmpIndex++] = arrData[leftNdx++].Data;
+                            }
+                            while (mid <= right)
+                            {
+                                temp[tmpIndex++] = arrData[mid++].Data;
+                            }
+                            // fill the elements with the sorted list
+                            for (int i = 0; i < tmpIndex; i++)
+                            {
+                                arrData[left + i].Data = temp[i];
+                            }
+                        }
+                    };
+                    MergeSort(0, nTotal - 1, 0);
+                    break;
+                case "MergeIP":
+                    Action<int, int, int> MergeSortIp = null;
+                    MergeSortIp = (left, right, depth) =>
+                    {
+                        SortBox.stats.MaxDepth = Math.Max(depth, SortBox.stats.MaxDepth);
+                        if (left >= right)
+                        {
+                            return;
+                        }
+                        int mid = (left + right) / 2;
+                        MergeSortIp(left, mid, depth + 1);
+                        mid++;
+                        MergeSortIp(mid, right, depth + 1);
+                        int leftNdx = left;
+                        int pivot = mid;
+                        int leftEnd = pivot - 1;
+                        while (leftNdx <= leftEnd && mid <= right)
+                        {
+                            if (arrData[leftNdx] < arrData[mid])
+                            {
+                                // left already in place
+                                leftNdx++;
                             }
                             else
                             {
-                                SortBox.Swap(arrData[i - 1], arrData[i]);
+                                // take from right: shift everyone over to make room
+                                var temp = arrData[mid].Data;
+                                for (int j = mid - 1; j >= leftNdx; j--)
+                                {
+                                    arrData[j + 1].Data = arrData[j].Data;
+                                }
+                                arrData[leftNdx].Data = temp;
+                                leftNdx++;
+                                leftEnd++;
+                                mid++;
+                            }
+                        }
+                    };
+                    MergeSortIp(0, nTotal - 1, 0);
+                    break;
+                case "MergeIP2":
+                    //http://stackoverflow.com/questions/2571049/how-to-sort-in-place-using-the-merge-sort-algorithm/22839426#22839426
+                    Action<int, int> reverse = (a, b) =>
+                    {
+                        for (--b; a < b; a++, b--)
+                        {
+                            arrData[a].Swap(arrData[b]);
+                        }
+                    };
+                    Func<int, int, int, int> rotate = (a, b, c) =>
+                    {
+                        //* swap the sequence [a,b) with [b,c). 
+                        if (a != b && b != c)
+                        {
+                            reverse(a, b);
+                            reverse(b, c);
+                            reverse(a, c);
+                        }
+                        return a + c - b;
+                    };
+                    Func<int, int, SortBox, int> lower_bound = (a, b, key) =>
+                    {
+                        //* find first element not less than @p key in sorted sequence or end of
+                        // * sequence (@p b) if not found. 
+                        for (int i = b - a; i != 0; i /= 2)
+                        {
+                            int mid = a + i / 2;
+                            if (arrData[mid] < key)
+                            {
+                                a = mid + 1;
                                 i--;
                             }
                         }
-                        break;
-                    case "Insertion":
-                        for (int i = 1; i < nTotal; i++)
+                        return a;
+                    };
+                    Func<int, int, SortBox, int> upper_bound = (a, b, key) =>
+                    {
+                        ///* find first element greater than @p key in sorted sequence or end of
+                        //* sequence (@p b) if not found. 
+                        for (int i = b - a; i != 0; i /= 2)
                         {
-                            var t = arrData[i].data;
-                            int j = i - 1;
-                            while (j >= 0 && arrData[j].CompareTo(t) > 0)
+                            int mid = a + i / 2;
+                            if (arrData[mid].CompareTo(key) <= 0)
                             {
-                                arrData[j + 1].SetData(arrData[j].data);
-                                j--;
-                            }
-                            arrData[j + 1].SetData(t);
-                        }
-                        break;
-                    case "Selection":
-                        // scan entire array for minimum, swap with 1st, then repeat for rest
-                        for (int i = 0; i < nTotal - 1; i++)
-                        {
-                            int minimum = i;
-                            for (int j = i + 1; j < nTotal; j++)
-                            {
-                                if (arrData[j] < arrData[minimum])
-                                {
-                                    minimum = j;
-                                }
-                            }
-                            if (minimum != i)
-                            {
-                                SortBox.Swap(arrData[i], arrData[minimum]);
+                                a = mid + 1;
+                                i--;
                             }
                         }
-                        break;
-                    case "Cycle":
-                        // deceptively fast because fewer updates, 
-                        // which are expensive in this code because of thread
-                        // context switches and drawing updated data
-                        // note the # of updates <= ntotal
-                        for (int cycleStart = 0; cycleStart < nTotal; cycleStart++)
+                        return a;
+                    };
+                    Action<int, int, int, int> mergeInPlace = null;
+                    mergeInPlace = (left, mid, right, depth) =>
+                    {
+                        SortBox.stats.MaxDepth = Math.Max(depth, SortBox.stats.MaxDepth);
+                        int n1 = mid - left;
+                        int n2 = right - mid;
+                        if (n1 == 0 || n2 == 0)
                         {
-                            // the item to place
-                            var item = arrData[cycleStart].data;
-                            int pos = cycleStart;
-                            do
-                            {
-                                int nextPos = 0;
-                                // find it's position # in entire array
-                                for (int i = 0; i < nTotal; i++)
-                                {
-                                    if (i != cycleStart && arrData[i].CompareTo(item) < 0)
-                                    {
-                                        nextPos++;
-                                    }
-                                }
-                                if (pos != nextPos)
-                                {
-                                    // move past duplicates
-                                    while (pos != nextPos && arrData[nextPos].CompareTo(item) == 0)
-                                    {
-                                        nextPos++;
-                                    }
-                                    // save the cur value at pos
-                                    var temp = arrData[nextPos].data;
-                                    // set the value at pos to the item to place
-                                    arrData[nextPos].SetData(item);
-                                    // new value for which to seek position
-                                    item = temp;
-                                    pos = nextPos;
-                                }
-                            } while (pos != cycleStart);
+                            return;
                         }
-                        break;
-                    case "Merge":
-                        // not in place: uses additional storage
-                        // lets make a recursive lambda
-                        Action<int, int, int> MergeSort = null;
-                        MergeSort = (left, right, depth) =>
+                        if (n1 == 1 && n2 == 1)
                         {
-                            SortBox.stats.MaxDepth = Math.Max(depth, SortBox.stats.MaxDepth);
-                            if (right > left)
+                            if (arrData[mid] < arrData[left])
                             {
-                                int mid = (right + left) / 2;
-                                MergeSort(left, mid, depth + 1);
-                                mid++;
-                                MergeSort(mid, right, depth + 1);
-                                // now we merge 2 sections that are already sorted
-                                int leftNdx = left;
-                                // use extra storage
-                                var temp = new string[right - left + 1];
-                                int tmpIndex = 0;
-                                int pivot = mid;
-                                while (leftNdx < pivot && mid <= right)
-                                {
-                                    // fill temp from left or right
-                                    if (arrData[leftNdx].CompareTo(arrData[mid]) > 0)
-                                    {
-                                        temp[tmpIndex++] = arrData[mid++].data;
-                                    }
-                                    else
-                                    {
-                                        temp[tmpIndex++] = arrData[leftNdx++].data;
-                                    }
-                                }
-                                // deal with leftovers on left or right
-                                while (leftNdx < pivot)
-                                {
-                                    temp[tmpIndex++] = arrData[leftNdx++].data;
-                                }
-                                while (mid <= right)
-                                {
-                                    temp[tmpIndex++] = arrData[mid++].data;
-                                }
-                                // fill the elements with the sorted list
-                                for (int i = 0; i < tmpIndex; i++)
-                                {
-                                    arrData[left + i].SetData(temp[i]);
-                                }
+                                arrData[mid].Swap(arrData[left]);
                             }
-                        };
-                        MergeSort(0, nTotal - 1, 0);
-                        break;
-                    case "MergeIP":
-                        Action<int, int, int> MergeSortIp = null;
-                        MergeSortIp = (left, right, depth) =>
+                        }
+                        else
                         {
-                            SortBox.stats.MaxDepth = Math.Max(depth, SortBox.stats.MaxDepth);
-                            if (left >= right)
+                            int p, q;
+                            if (n1 <= n2)
                             {
-                                return;
-                            }
-                            int mid = (left + right) / 2;
-                            MergeSortIp(left, mid, depth + 1);
-                            mid++;
-                            MergeSortIp(mid, right, depth + 1);
-                            int leftNdx = left;
-                            int pivot = mid;
-                            int leftEnd = pivot - 1;
-                            while (leftNdx <= leftEnd && mid <= right)
-                            {
-                                if (arrData[leftNdx] < arrData[mid])
-                                {
-                                    // left already in place
-                                    leftNdx++;
-                                }
-                                else
-                                {
-                                    // take from right: shift everyone over to make room
-                                    var temp = arrData[mid].data;
-                                    for (int j = mid - 1; j >= leftNdx; j--)
-                                    {
-                                        arrData[j + 1].SetData(arrData[j].data);
-                                    }
-                                    arrData[leftNdx].SetData(temp);
-                                    leftNdx++;
-                                    leftEnd++;
-                                    mid++;
-                                }
-                            }
-                        };
-                        MergeSortIp(0, nTotal - 1, 0);
-                        break;
-                    case "MergeIP2":
-                        //http://stackoverflow.com/questions/2571049/how-to-sort-in-place-using-the-merge-sort-algorithm/22839426#22839426
-                        Action<int, int> reverse = (a, b) =>
-                        {
-                            for (--b; a < b; a++, b--)
-                            {
-                                SortBox.Swap(arrData[a], arrData[b]);
-                            }
-                        };
-                        Func<int, int, int, int> rotate = (a, b, c) =>
-                        {
-                            //* swap the sequence [a,b) with [b,c). 
-                            if (a != b && b != c)
-                            {
-                                reverse(a, b);
-                                reverse(b, c);
-                                reverse(a, c);
-                            }
-                            return a + c - b;
-                        };
-                        Func<int, int, SortBox, int> lower_bound = (a, b, key) =>
-                        {
-                            //* find first element not less than @p key in sorted sequence or end of
-                            // * sequence (@p b) if not found. 
-                            int i;
-                            for (i = b - a; i != 0; i /= 2)
-                            {
-                                int mid = a + i / 2;
-                                if (arrData[mid] < key)
-                                {
-                                    a = mid + 1;
-                                    i--;
-                                }
-                            }
-                            return a;
-                        };
-                        Func<int, int, SortBox, int> upper_bound = (a, b, key) =>
-                        {
-                            ///* find first element greater than @p key in sorted sequence or end of
-                            //* sequence (@p b) if not found. 
-
-                            int i;
-                            for (i = b - a; i != 0; i /= 2)
-                            {
-                                int mid = a + i / 2;
-                                if (arrData[mid].CompareTo(key) <= 0)
-                                {
-                                    a = mid + 1;
-                                    i--;
-                                }
-                            }
-                            return a;
-                        };
-                        Action<int, int, int, int> mergeInPlace = null;
-                        mergeInPlace = (left, mid, right, depth) =>
-                        {
-                            SortBox.stats.MaxDepth = Math.Max(depth, SortBox.stats.MaxDepth);
-                            int n1 = mid - left;
-                            int n2 = right - mid;
-
-                            if (n1 == 0 || n2 == 0)
-                                return;
-                            if (n1 == 1 && n2 == 1)
-                            {
-                                if (arrData[mid] < arrData[left])
-                                {
-                                    SortBox.Swap(arrData[mid], arrData[left]);
-                                }
+                                q = mid + n2 / 2;
+                                p = upper_bound(left, mid, arrData[q]);
                             }
                             else
                             {
-                                int p, q;
-                                if (n1 <= n2)
-                                {
-                                    q = mid + n2 / 2;
-                                    p = upper_bound(left, mid, arrData[q]);
-                                }
-                                else
-                                {
-                                    p = left + n1 / 2;
-                                    q = lower_bound(mid, right, arrData[p]);
-                                }
-                                mid = rotate(p, mid, q);
+                                p = left + n1 / 2;
+                                q = lower_bound(mid, right, arrData[p]);
+                            }
+                            mid = rotate(p, mid, q);
 
-                                mergeInPlace(left, p, mid, depth + 1);
-                                mergeInPlace(mid, q, right, depth + 1);
-                            }
-                        };
-                        Action<int, int, int> inPlaceMergeSort = null;
-                        inPlaceMergeSort = (left, nElem, depth) =>
+                            mergeInPlace(left, p, mid, depth + 1);
+                            mergeInPlace(mid, q, right, depth + 1);
+                        }
+                    };
+                    Action<int, int, int> inPlaceMergeSort = null;
+                    inPlaceMergeSort = (left, nElem, depth) =>
+                    {
+                        if (nElem > 1)
                         {
-                            if (nElem > 1)
-                            {
-                                int mid = nElem / 2;
-                                inPlaceMergeSort(left, mid, depth + 1);
-                                inPlaceMergeSort(left + mid, nElem - mid, depth + 1);
-                                mergeInPlace(left, left + mid, left + nElem, depth + 1);
-                            }
-                        };
-                        inPlaceMergeSort(0, nTotal, 0);
-                        break;
-                    case "Quick":
-                        // lets make a recursive lambda
-                        Action<int, int, int> quickSort = null;
-                        quickSort = (left, right, depth) =>
+                            int mid = nElem / 2;
+                            inPlaceMergeSort(left, mid, depth + 1);
+                            inPlaceMergeSort(left + mid, nElem - mid, depth + 1);
+                            mergeInPlace(left, left + mid, left + nElem, depth + 1);
+                        }
+                    };
+                    inPlaceMergeSort(0, nTotal, 0);
+                    break;
+                case "Quick":
+                    // lets make a recursive lambda
+                    Action<int, int, int> quickSort = null;
+                    quickSort = (left, right, depth) =>
+                    {
+                        SortBox.stats.MaxDepth = Math.Max(depth, SortBox.stats.MaxDepth);
+                        if (left < right)
                         {
-                            SortBox.stats.MaxDepth = Math.Max(depth, SortBox.stats.MaxDepth);
-                            if (left < right)
+                            var pivot = arrData[left];
+                            // i will move in from the left, 
+                            //  j from the right
+                            int i = left;
+                            int j = right;
+                            while (i < j)
                             {
-                                var pivot = arrData[left];
-                                // i will move in from the left, 
-                                //  j from the right
-                                int i = left;
-                                int j = right;
-                                while (i < j)
+                                // find the leftmost one that should be on the right
+                                while (i < right && !(arrData[i] > pivot))
                                 {
-                                    // find the leftmost one that should be on the right
-                                    while (i < right && !(arrData[i] > pivot))
-                                    {
-                                        i++;
-                                    }
-                                    // set j to the rightmost one that should be on the left
-                                    while (arrData[j] > pivot)
-                                    {
-                                        j--;
-                                    }
-                                    if (i < j)
-                                    {
-                                        SortBox.Swap(arrData[i], arrData[j]);
-                                    }
+                                    i++;
                                 }
-                                // now put pivot into place
-                                SortBox.Swap(pivot, arrData[j]);
-
-                                // now recur to sort left, then right sides 
-                                quickSort(left, j - 1, depth + 1);
-                                quickSort(j + 1, right, depth + 1);
-                            }
-                        };
-                        // now do the actual sort
-                        quickSort(0, nTotal - 1, 0);
-                        break;
-                    case "Shell":
-                        for (int g = nTotal / 2; g > 0; g /= 2)
-                        {
-                            for (int i = g; i < nTotal; i++)
-                            {
-                                for (int j = i - g; j >= 0 && arrData[j] > arrData[j + g]; j -= g)
+                                // set j to the rightmost one that should be on the left
+                                while (arrData[j] > pivot)
                                 {
-                                    SortBox.Swap(arrData[j], arrData[j + g]);
+                                    j--;
+                                }
+                                if (i < j)
+                                {
+                                    arrData[i].Swap(arrData[j]);
                                 }
                             }
+                            // now put pivot into place
+                            pivot.Swap(arrData[j]);
+                            // now recur to sort left, then right sides 
+                            quickSort(left, j - 1, depth + 1);
+                            quickSort(j + 1, right, depth + 1);
                         }
-                        break;
-                    case "Heap":
-                        // https://simpledevcode.wordpress.com/2014/11/25/heapsort-c-tutorial/
-                        int heapSize = 0;
-                        Action<int> Heapify = null;
-                        Heapify = (index) =>
+                    };
+                    // now do the actual sort
+                    quickSort(0, nTotal - 1, 0);
+                    break;
+                case "Shell":
+                    for (int g = nTotal / 2; g > 0; g /= 2)
+                    {
+                        for (int i = g; i < nTotal; i++)
                         {
-                            int left = 2 * index;
-                            int right = 2 * index + 1;
-                            int largest = index;
-
-                            if (left <= heapSize && arrData[left] > arrData[index])
+                            for (int j = i - g; j >= 0 && arrData[j] > arrData[j + g]; j -= g)
                             {
-                                largest = left;
+                                arrData[j].Swap(arrData[j + g]);
                             }
-                            if (right <= heapSize && arrData[right] > arrData[largest])
-                            {
-                                largest = right;
-                            }
+                        }
+                    }
+                    break;
+                case "Heap":
+                    // https://simpledevcode.wordpress.com/2014/11/25/heapsort-c-tutorial/
+                    int heapSize = 0;
+                    Action<int> Heapify = null;
+                    Heapify = (index) =>
+                    {
+                        int left = 2 * index;
+                        int right = 2 * index + 1;
+                        int largest = index;
 
-                            if (largest != index)
-                            {
-                                SortBox.Swap(arrData[index], arrData[largest]);
-                                Heapify(largest);
-                            }
-                        };
-                        heapSize = nTotal - 1;
-                        for (int i = nTotal / 2; i >= 0; i--)
+                        if (left <= heapSize && arrData[left] > arrData[index])
                         {
-                            Heapify(i);
+                            largest = left;
                         }
-                        for (int i = nTotal - 1; i >= 0; i--)
+                        if (right <= heapSize && arrData[right] > arrData[largest])
                         {
-                            SortBox.Swap(arrData[0], arrData[i]);
-                            heapSize--;
-                            Heapify(0);
+                            largest = right;
                         }
-                        break;
-                    case "Super":
 
-                        var data = (from dat in arrData
-                                    orderby dat
-                                    select dat.data).ToArray();
-                        for (int i = 0; i < nTotal; i++)
+                        if (largest != index)
                         {
-                            arrData[i].SetData(data[i]);
+                            arrData[index].Swap(arrData[largest]);
+                            Heapify(largest);
                         }
-                        break;
-                }
-            }
-            catch (TaskCanceledException)
-            {
-            }
-            catch (Exception ex)
-            {
-                addStatusMsg($"Exception {ex.ToString()}");
+                    };
+                    heapSize = nTotal - 1;
+                    for (int i = nTotal / 2; i >= 0; i--)
+                    {
+                        Heapify(i);
+                    }
+                    for (int i = nTotal - 1; i >= 0; i--)
+                    {
+                        arrData[0].Swap(arrData[i]);
+                        heapSize--;
+                        Heapify(0);
+                    }
+                    break;
+                case "Super":
+
+                    var data = (from dat in arrData
+                                orderby dat
+                                select dat.Data).ToArray();
+                    for (int i = 0; i < nTotal; i++)
+                    {
+                        arrData[i].Data = data[i];
+                    }
+                    break;
             }
         }
 
