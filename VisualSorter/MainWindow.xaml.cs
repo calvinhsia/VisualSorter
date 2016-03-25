@@ -38,8 +38,8 @@ namespace WpfApplication1
         public static CancellationTokenSource _cancelTokSrc;
         public static bool _ShowSort = true;
         internal Canvas _canvas = new Canvas();
-        public int _spControlsHeight = 60;
-        public int _nRows = 80;
+        public static int _spControlsHeight = 60;
+        public int _nRows = (int)(SystemParameters.PrimaryScreenHeight - _spControlsHeight - 80) / 10;
 
         public class SortBox : Label, IComparable
         {
@@ -246,6 +246,7 @@ namespace WpfApplication1
 
                 btnSort.Click += (ob, eb) =>
                 {
+                    btnSort.IsEnabled = false;
                     _cancelTokSrc = new CancellationTokenSource();
                     var sortType = (string)cboSortType.SelectedValue;
                     // lets create controls on main thread
@@ -276,6 +277,7 @@ namespace WpfApplication1
                                 }
                                 string donemsg = _cancelTokSrc.IsCancellationRequested ? "Aborted" : "Done   ";
                                 addStatusMsg($"{sortType,10} {donemsg} {stats} {hasError}");
+                                btnSort.IsEnabled = true;
                             }));
                     });
                 };
@@ -311,8 +313,7 @@ namespace WpfApplication1
             var arrData = new List<SortBox>();
             var rand = new Random(1);
             int colWidth = 20 + 8 * (maxDatalength - 1);
-            int nCols = 60 - (maxDatalength - 1) * 8;
-
+            int nCols = (int)SystemParameters.PrimaryScreenWidth / colWidth;
             for (int i = 0; i < _nRows; i++)
             {
                 for (int j = 0; j < nCols; j++)
@@ -356,7 +357,7 @@ namespace WpfApplication1
                         arrData.Add(box);
                         if (_ShowSort)
                         {
-                            Canvas.SetTop(box, 10 + _spControlsHeight + i * 10);
+                            Canvas.SetTop(box, 5 + _spControlsHeight + i * 10);
                             Canvas.SetLeft(box, j * colWidth);
                             _canvas.Children.Add(box);
                         }
@@ -511,6 +512,7 @@ namespace WpfApplication1
                                 MergeSort(mid, right, depth + 1);
                                 // now we merge 2 sections that are already sorted
                                 int leftNdx = left;
+                                // use extra storage
                                 var temp = new string[right - left + 1];
                                 int tmpIndex = 0;
                                 int pivot = mid;
@@ -549,17 +551,17 @@ namespace WpfApplication1
                         MergeSortIp = (left, right, depth) =>
                         {
                             SortBox.stats.MaxDepth = Math.Max(depth, SortBox.stats.MaxDepth);
-                            if (left >=right)
+                            if (left >= right)
                             {
                                 return;
                             }
-                            int mid = (left + right)/ 2;
+                            int mid = (left + right) / 2;
                             MergeSortIp(left, mid, depth + 1);
                             mid++;
                             MergeSortIp(mid, right, depth + 1);
                             int leftNdx = left;
                             int pivot = mid;
-                            int leftEnd = pivot-1;
+                            int leftEnd = pivot - 1;
                             while (leftNdx <= leftEnd && mid <= right)
                             {
                                 if (arrData[leftNdx] < arrData[mid])
