@@ -19,6 +19,7 @@ namespace WpfApplication1
             "Stupid",
             "Insertion",
             "Selection",
+            "OddEven",
             "Cycle",
             "Merge",
             "MergeIP",
@@ -72,6 +73,11 @@ namespace WpfApplication1
                     MaxDepth = -1
                 };
             }
+
+            public SortBox()
+            {
+                //                this.FontSize = 8;
+            }
             public void Swap(SortBox other)
             {
                 if (this != other)
@@ -123,12 +129,15 @@ namespace WpfApplication1
                     {
                         // set the content on the UI thread
                         this.Content = this.Data;
-                        // check input queue for messages
-                        var stat = GetQueueStatus(4);
-                        if (stat != 0)
+                        if (_cancelTokSrc != null)
                         {
-                            //need to throw on right thread
-                            fCancel = true;
+                            // check input queue for messages
+                            var stat = GetQueueStatus(4);
+                            if (stat != 0)
+                            {
+                                //need to throw on right thread
+                                fCancel = true;
+                            }
                         }
                     });
                     if (fCancel)
@@ -212,9 +221,9 @@ namespace WpfApplication1
                 spVertControls.Children.Add(chkShowSort);
                 var txtMaxDataLength = new TextBox()
                 {
-                    Text = "5",
+                    Text = "0",
                     Width = 40,
-                    ToolTip = "Max # of chars per datum"
+                    ToolTip = "Max # of random chars per datum. 0 means use a dictionary of real words"
                 };
                 spVertControls.Children.Add(txtMaxDataLength);
                 var txtStatus = new TextBox()
@@ -238,8 +247,8 @@ namespace WpfApplication1
 
                 btnSort.Click += (ob, eb) =>
                 {
+                    _cancelTokSrc = null;
                     btnSort.IsEnabled = false;
-                    _cancelTokSrc = new CancellationTokenSource();
                     var sortType = (string)cboSortType.SelectedValue;
                     // lets create controls on main thread
                     _canvas.Children.Clear();
@@ -248,6 +257,7 @@ namespace WpfApplication1
                     var arrData = new List<SortBox>();
                     var maxDatalength = int.Parse(txtMaxDataLength.Text);
                     arrData = InitData(ref nTotal, maxDatalength, chkLettersOnly.IsChecked.Value);
+                    _cancelTokSrc = new CancellationTokenSource();
                     var tsk = Task.Run(() =>
                     {
                         // do the sorting on a background thread
@@ -284,6 +294,7 @@ namespace WpfApplication1
                             }));
                     });
                 };
+                btnSort.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, this));
             }
             catch (Exception ex)
             {
@@ -315,7 +326,19 @@ namespace WpfApplication1
         {
             var arrData = new List<SortBox>();
             var rand = new Random(1);
-            int colWidth = 20 + 8 * (maxDatalength - 1);
+            Dictionary.CDict dict = null;
+            int colWidth;
+            if (maxDatalength == 0)
+            {
+                dict = new Dictionary.CDict();
+                dict.DictNum = 2;
+                maxDatalength = 11;
+                colWidth = 8 * (maxDatalength - 1);
+            }
+            else
+            {
+                colWidth = 20 + 8 * (maxDatalength - 1);
+            }
             int nCols = (int)this.ActualWidth / colWidth;
             if (nCols == 0) //tests
             {
@@ -363,7 +386,14 @@ namespace WpfApplication1
                                 break;
                         }
                         var box = new SortBox();
-                        box.Data = dat.Substring(0, Math.Min(maxDatalength, dat.Length));
+                        if (dict == null)
+                        {
+                            box.Data = dat.Substring(0, Math.Min(maxDatalength, dat.Length));
+                        }
+                        else
+                        {
+                            box.Data = dict.RandWord(0);
+                        }
                         box.Content = box.Data;
                         arrData.Add(box);
                         if (_ShowSort)
@@ -440,11 +470,16 @@ namespace WpfApplication1
                     {
                         var t = arrData[i].Data;
                         int j = i - 1;
-                        while (j >= 0 && arrData[j].CompareTo(t) > 0)
+                        for (; j >= 0 && arrData[j].CompareTo(t) > 0; j--)
                         {
                             arrData[j + 1].Data = arrData[j].Data;
-                            j--;
                         }
+                        //int j = i - 1;
+                        //while (j >= 0 && arrData[j].CompareTo(t) > 0)
+                        //{
+                        //    arrData[j + 1].Data = arrData[j].Data;
+                        //    j--;
+                        //}
                         arrData[j + 1].Data = t;
                     }
                     break;
@@ -463,6 +498,29 @@ namespace WpfApplication1
                         if (minimum != i)
                         {
                             arrData[i].Swap(arrData[minimum]);
+                        }
+                    }
+                    break;
+                case "OddEven":
+                    var sorted = false;
+                    while (!sorted)
+                    {
+                        sorted = true;
+                        for (int i = 1; i < nTotal - 1; i += 2)
+                        {
+                            if (arrData[i + 1] < arrData[i])
+                            {
+                                arrData[i + 1].Swap(arrData[i]);
+                                sorted = false;
+                            }
+                        }
+                        for (int i = 0; i < nTotal - 1; i += 2)
+                        {
+                            if (arrData[i + 1] < arrData[i])
+                            {
+                                arrData[i + 1].Swap(arrData[i]);
+                                sorted = false;
+                            }
                         }
                     }
                     break;
@@ -494,9 +552,9 @@ namespace WpfApplication1
                                 {
                                     nextPos++;
                                 }
-                                // save the cur value at pos
+                                // save the cur value at nextpos
                                 var temp = arrData[nextPos].Data;
-                                // set the value at pos to the item to place
+                                // set the value at nextpos to the item to place
                                 arrData[nextPos].Data = item;
                                 // new value for which to seek position
                                 item = temp;
@@ -527,7 +585,7 @@ namespace WpfApplication1
                             while (leftNdx < pivot && mid <= right)
                             {
                                 // fill temp from left or right
-                                if (arrData[leftNdx].CompareTo(arrData[mid]) > 0)
+                                if (arrData[mid] < arrData[leftNdx])
                                 {
                                     temp[tmpIndex++] = arrData[mid++].Data;
                                 }
@@ -694,7 +752,6 @@ namespace WpfApplication1
                     inPlaceMergeSort(0, nTotal, 0);
                     break;
                 case "Quick":
-                    // lets make a recursive lambda
                     Action<int, int, int> quickSort = null;
                     quickSort = (left, right, depth) =>
                     {
@@ -702,8 +759,6 @@ namespace WpfApplication1
                         if (left < right)
                         {
                             var pivot = arrData[left];
-                            // i will move in from the left, 
-                            //  j from the right
                             int i = left;
                             int j = right;
                             while (i < j)
@@ -748,9 +803,10 @@ namespace WpfApplication1
                 case "Heap":
                     // https://simpledevcode.wordpress.com/2014/11/25/heapsort-c-tutorial/
                     int heapSize = 0;
-                    Action<int> Heapify = null;
-                    Heapify = (index) =>
+                    Action<int, int> Heapify = null;
+                    Heapify = (index, depth) =>
                     {
+                        SortBox.stats.MaxDepth = Math.Max(SortBox.stats.MaxDepth, depth);
                         int left = 2 * index;
                         int right = 2 * index + 1;
                         int largest = index;
@@ -767,23 +823,22 @@ namespace WpfApplication1
                         if (largest != index)
                         {
                             arrData[index].Swap(arrData[largest]);
-                            Heapify(largest);
+                            Heapify(largest, depth + 1);
                         }
                     };
                     heapSize = nTotal - 1;
                     for (int i = nTotal / 2; i >= 0; i--)
                     {
-                        Heapify(i);
+                        Heapify(i, 0);
                     }
                     for (int i = nTotal - 1; i >= 0; i--)
                     {
                         arrData[0].Swap(arrData[i]);
                         heapSize--;
-                        Heapify(0);
+                        Heapify(0, 0);
                     }
                     break;
                 case "Super":
-
                     var data = (from dat in arrData
                                 orderby dat
                                 select dat.Data).ToArray();
