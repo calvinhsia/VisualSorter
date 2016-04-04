@@ -15,7 +15,7 @@ namespace SorterTests
             MainWindow._ShowSort = false;
             TestContext.WriteLine("Start");
             foreach (var sortType in MainWindow._SortTypes.Where(
-                //*
+                /*
                 t => true
                 /*/
                 t => 
@@ -26,11 +26,12 @@ namespace SorterTests
                 && t != "Selection"
                 && t != "Insertion"
                 && t != "MergeIP"
+                && t != "OddEven"
 
                 //*/
                 ))
             {
-                for (int pow = 0, nTotal = 1; pow < 5; pow++)
+                for (int pow = 0, nTotal = 1; pow < 7; pow++)
                 {
                     var mwindow = new MainWindow();
                     mwindow._nRows = 1000000; // don't limit data by # rows
