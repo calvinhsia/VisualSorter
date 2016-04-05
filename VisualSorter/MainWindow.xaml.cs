@@ -181,12 +181,15 @@ namespace WpfApplication1
                 {
                     Content = "Do_Sort",
                     ToolTip = "Will generate data and sort. Click to cancel",
-                    Height = _spControlsHeight
+                    Height = 20,
+                    VerticalAlignment = VerticalAlignment.Top
                 };
                 spControls.Children.Add(btnSort);
                 var cboSortType = new ComboBox()
                 {
                     ItemsSource = _SortTypes,
+                    Height = 20,
+                    VerticalAlignment = VerticalAlignment.Top,
                     Width = 150,
                 };
                 cboSortType.SelectedIndex = 8;
@@ -195,6 +198,8 @@ namespace WpfApplication1
                 {
                     Text = "4000",
                     ToolTip = "Max Number of items to sort. (limited by display)",
+                    Height = 20,
+                    VerticalAlignment = VerticalAlignment.Top,
                     Width = 100
                 };
                 spControls.Children.Add(txtNumItems);
@@ -326,11 +331,26 @@ namespace WpfApplication1
         {
             var arrData = new List<SortBox>();
             var rand = new Random(1);
+            /* to use without the dictionary (using random letters) comment the current line and the new Dictionary line below
+             
+            dynamic dict = null;
+            maxDatalength = 5;
+
+            /*/
+            // get the dictionary from my OneDrive:
+            // https://onedrive.live.com/redir?resid=D69F3552CEFC21!99083&authkey=!AFjyjUlZpH5sQy0&ithint=file%2cdll 
+            // then run the command RegSvr32 dictionary.dll
+            // then add a reference to COM ->Dictionary 1.0 Type Library
             Dictionary.CDict dict = null;
+            //*/
             int colWidth;
+            // we will try to fill the screen with sort data. 
+            // However, there are times when a particular # of items is desired,
+            // such as debugging a list of 5 items.
+            // so we limit by nTotal or screen capacity 
             if (maxDatalength == 0)
             {
-                dict = new Dictionary.CDict();
+                dict = new Dictionary.CDict(); // comment out this line if no dictionary
                 dict.DictNum = 2;
                 maxDatalength = 11;
                 colWidth = 8 * (maxDatalength - 1);
