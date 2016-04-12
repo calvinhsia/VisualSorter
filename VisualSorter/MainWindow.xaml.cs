@@ -249,26 +249,43 @@ namespace WpfApplication1
                         ));
                 };
                 spControls.Children.Add(txtStatus);
-
+                List<SortBox> arrData = null;
+                int nTotal = 0;
                 btnSort.Click += (ob, eb) =>
                 {
-                    _cancelTokSrc = null;
+                    _cancelTokSrc = new CancellationTokenSource();
                     btnSort.IsEnabled = false;
                     var sortType = (string)cboSortType.SelectedValue;
-                    // lets create controls on main thread
-                    _canvas.Children.Clear();
-                    _canvas.Children.Add(spControls);
-                    int nTotal = int.Parse(txtNumItems.Text);
-                    var arrData = new List<SortBox>();
-                    var maxDatalength = int.Parse(txtMaxDataLength.Text);
-                    arrData = InitData(ref nTotal, maxDatalength, chkLettersOnly.IsChecked.Value);
-                    _cancelTokSrc = new CancellationTokenSource();
+                    if (arrData == null ||
+                        !System.Windows.Input.Keyboard.IsKeyDown(System.Windows.Input.Key.LeftShift)
+                    )
+                    {
+                        // lets create controls on main thread
+                        _canvas.Children.Clear();
+                        _canvas.Children.Add(spControls);
+                        nTotal = int.Parse(txtNumItems.Text);
+                        arrData = new List<SortBox>();
+                        var maxDatalength = int.Parse(txtMaxDataLength.Text);
+                        arrData = InitData(ref nTotal, maxDatalength, chkLettersOnly.IsChecked.Value);
+                        addStatusMsg($"Starting {sortType} with {nTotal} items. Click anywhare to stop");
+                    }
+                    else
+                    {// user left shift-click: continue sorting with a possible different algorithm
+                        // note: cancellation can result in slight data errors because exception thrown
+                        for (int i = 1; i < nTotal; i++)
+                        {
+                            if (arrData[i] < arrData[i - 1])
+                            {
+                                arrData[i].FontWeight = FontWeights.Normal;
+                            }
+                        }
+                        addStatusMsg($"Continuing with  {sortType}   {nTotal} items. Click anywhare to stop");
+                    }
                     var tsk = Task.Run(() =>
                     {
                         // do the sorting on a background thread
                         try
                         {
-                            addStatusMsg($"Starting {sortType} with {nTotal} items. Click anywhare to stop");
                             DoTheSorting(arrData, sortType, nTotal);
                         }
                         catch (TaskCanceledException)
