@@ -180,7 +180,7 @@ namespace WpfApplication1
                 var btnSort = new Button()
                 {
                     Content = "Do_Sort",
-                    ToolTip = "Will generate data and sort. Click to cancel",
+                    ToolTip = "Will generate data and sort. Click to cancel. LeftShift-Click to continue an aborted sort, possibly with a different algorithm",
                     Height = 20,
                     VerticalAlignment = VerticalAlignment.Top
                 };
