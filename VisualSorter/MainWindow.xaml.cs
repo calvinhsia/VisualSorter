@@ -575,6 +575,7 @@ namespace WpfApplication1
                         {
                             int nextPos = 0;
                             // find it's position # in entire array
+                            // by finding how many should precede it
                             for (int i = 0; i < nTotal; i++)
                             {
                                 if (i != cycleStart && arrData[i].CompareTo(item) < 0)
@@ -582,6 +583,7 @@ namespace WpfApplication1
                                     nextPos++;
                                 }
                             }
+                            // if it's not in the correct position
                             if (pos != nextPos)
                             {
                                 // move past duplicates
@@ -616,32 +618,31 @@ namespace WpfApplication1
                             // now we merge 2 sections that are already sorted
                             int leftNdx = left;
                             // use extra storage
-                            var temp = new string[right - left + 1];
-                            int tmpIndex = 0;
+                            var temp = new List<string>();
                             int pivot = mid;
                             while (leftNdx < pivot && mid <= right)
                             {
                                 // fill temp from left or right
                                 if (arrData[mid] < arrData[leftNdx])
                                 {
-                                    temp[tmpIndex++] = arrData[mid++].Data;
+                                    temp.Add(arrData[mid++].Data);
                                 }
                                 else
                                 {
-                                    temp[tmpIndex++] = arrData[leftNdx++].Data;
+                                    temp.Add(arrData[leftNdx++].Data);
                                 }
                             }
                             // deal with leftovers on left or right
                             while (leftNdx < pivot)
                             {
-                                temp[tmpIndex++] = arrData[leftNdx++].Data;
+                                temp.Add(arrData[leftNdx++].Data);
                             }
                             while (mid <= right)
                             {
-                                temp[tmpIndex++] = arrData[mid++].Data;
+                                temp.Add(arrData[mid++].Data);
                             }
                             // fill the elements with the sorted list
-                            for (int i = 0; i < tmpIndex; i++)
+                            for (int i = 0; i < temp.Count; i++)
                             {
                                 arrData[left + i].Data = temp[i];
                             }
